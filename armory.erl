@@ -110,12 +110,19 @@ parse_character(XmlBody) ->
                 {"nature_resistance", "/page/characterInfo/characterTab/resistances/nature/@value"},
                 {"shadow_resistance", "/page/characterInfo/characterTab/resistances/shadow/@value"}
             ],
-            Attribs = [begin
-                [#xmlAttribute{value = Value}] = xmerl_xpath:string(Xpath, Xml), {Name, Value}
-            end|| {Name, Xpath} <- MainAttribs],
-            Gear = parse_character_gear(Xml),
-            Skills = parse_character_skills(Xml),            
-            {ok, [ {gear, Gear}, {skills, Skills} | Attribs]};
+            Attribs = lists:foldl(fun({Name, Xpath}, Acc) ->
+                case xmerl_xpath:string(Xpath, Xml) of
+                    [#xmlAttribute{value = Value}] -> [{Name, Value} | Acc];
+                    _ -> Acc
+                end
+            end, [], MainAttribs),
+            case length(Attribs) of
+                0 -> {error, parse_error};
+                _ ->
+                    Gear = parse_character_gear(Xml),
+                    Skills = parse_character_skills(Xml),            
+                    {ok, [ {gear, Gear}, {skills, Skills} | Attribs]}
+            end;
         _ -> {error, parse_arror}
     catch
         _:_ -> {error, parse_arror}
@@ -228,7 +235,7 @@ armory_url({character, "EU", Realm, Name}) ->
 %% armory:queue({character, {"US", "Medivh", "Enyo"}}).
 %% armory:queue({character, {"US", "Medivh", "Invis"}}).
 queue(Item) ->
-    queue(Item, fun(Message) -> ok end).
+    queue(Item, fun(_) -> ok end).
 
 queue(Item, Fun) ->
     spawn(fun() ->
