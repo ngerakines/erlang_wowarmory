@@ -211,9 +211,11 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 armory_fetch(FetchData) ->
     Url = armory_url(FetchData),
-    case http:request(get, {Url, [{"User-Agent", ?USER_AGENT}]}, [], []) of
+    try http:request(get, {Url, [{"User-Agent", ?USER_AGENT}]}, [], []) of
         {ok, {_Status, _Headers, Body}} -> {ok, Body};
         F -> {error, F}
+    catch
+        _:_ -> {error, something_caught}
     end.
 
 armory_url({guild, "US", Realm, Name}) ->
