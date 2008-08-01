@@ -1,0 +1,11 @@
+Package: erlang_armory
+Version: 0.1
+Section: web 
+Priority: optional
+Architecture: all
+Essential: no
+Depends: erlang
+Installed-Size: 1024
+Maintainer: Nick Gerakines <nick@gerakines.net>
+Provides: erlang_armory
+Description: This is an interface to the World of Warcraft Armory.
