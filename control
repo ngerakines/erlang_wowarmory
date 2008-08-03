@@ -1,5 +1,5 @@
 Package: erlang-armory
-Version: 0.1
+Version: 0.2
 Section: web 
 Priority: optional
 Architecture: all

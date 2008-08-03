@@ -28,16 +28,25 @@
 -module(armory).
 
 -author("Nick Gerakines <nick@gerakines.net>").
--version("0.1").
+-version("0.2").
 
 -define(FETCH_DELAY, 2000).
 -define(USER_AGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9").
 -define(ACCEPT_CHARSET, "utf-8").
 
+%% gen_server exports
 -export([
     init/1, terminate/2, code_change/3,
     handle_call/3, handle_cast/2, handle_info/2
 ]).
+
+%% public API exports
+-export([start/0, queue/1, queue/2, info/0, dequeue/0]).
+
+%% internal exports
+-export([fetchloop/0, process_character/2, parse_character/1, parse_character_gear/1]).
+-export([parse_character_skills/1, process_guild/2, parse_guild/1, parse_guild_members/1]).
+-export([armory_url/1, armory_fetch/1]).
 
 -compile(export_all).
 
@@ -45,10 +54,16 @@
 
 -record(armory_state, {fetchloop, queue}).
 
+%% @spec start() -> {error, any()} | {ok, pid()}
+%% @doc Starts an armory process that calls are made to.
 start() ->
     inets:start(),
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
+%% pragma mark -
+%% pragma mark gen_server functions
+
+%% @private
 init(_) ->
     process_flag(trap_exit, true),
     ok = pg2:create(armory),
@@ -58,6 +73,43 @@ init(_) ->
         fetchloop = spawn(?MODULE, fetchloop, [])}
     }.
 
+%% @private
+handle_call({info}, _From, State) ->
+    {reply, State, State};
+
+%% @private
+handle_call({queue, Item}, From, State) ->
+    OldQueue = State#armory_state.queue,    
+    {reply, ok, State#armory_state{ queue = queue:in({From, Item}, OldQueue) }};
+
+%% @private
+handle_call({dequeue}, _From, State) ->
+    {Item, Queue} = case queue:out(State#armory_state.queue) of
+        {{value, I1}, Q2} -> {I1, Q2};
+        {empty, Q1} -> {empty, Q1}
+    end,
+    {reply, Item, State#armory_state{ queue = Queue }};
+
+%% @private
+handle_call(stop, _From, State) -> {stop, normalStop, State};
+
+%% @private
+handle_call(_, _From, State) -> {noreply, ok, State}.
+
+%% @private
+handle_cast(_Msg, State) -> {noreply, State}.
+
+%% @private
+handle_info(_Info, State) -> {noreply, State}.
+
+%% @private
+terminate(_Reason, _State) -> ok.
+
+%% @private
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
+
+%% @spec fetchloop() -> infinate
+%% @doc The loop that dequeues items in the fetch queue and processes them.
 fetchloop() ->
     try armory:dequeue() of
         {{FromPid, _FromRef}, {character, CharacterData}} ->
@@ -71,16 +123,31 @@ fetchloop() ->
     timer:sleep(?FETCH_DELAY),
     armory:fetchloop().
 
+%% pragma mark -
+%% pragma mark processing and parsing functions
+
+%% @spec process_character(FromPid, {RealmClass, Realm, Name}) -> ok
+%% where 
+%%       FromPid = pid()
+%%       RealmClass = string()
+%%       Realm = string()
+%%       Name = string()
+%% @doc Fetch a given character from the armory and process the response.
 process_character(FromPid, {RealmClass, Realm, Name}) ->
-    io:format("Processing character ~s of ~s-~s.~n", [Name, Realm, RealmClass]),
     Response = case armory_fetch({character, RealmClass, Realm, Name}) of
         {error, Reason} -> {error, Reason};
         {ok, Body} ->
+            io:format("body: ~p~n", [Body]),
             parse_character(Body)
     end,
     FromPid ! Response,
     ok.
 
+%% @spec parse_character(XmlBody) -> Result
+%% where 
+%%       XmlBody = string()
+%%       Result = {ok, list(any())} | {error, atom()}
+%% @doc Parse a chunk of xml that supposedly represents a character.
 parse_character(XmlBody) ->
     try xmerl_scan:string(XmlBody, [{quiet, true}]) of
         {Xml, _Rest} ->
@@ -108,7 +175,8 @@ parse_character(XmlBody) ->
                 {"frost_resistance", "/page/characterInfo/characterTab/resistances/frost/@value"},
                 {"holy_resistance", "/page/characterInfo/characterTab/resistances/holy/@value"},
                 {"nature_resistance", "/page/characterInfo/characterTab/resistances/nature/@value"},
-                {"shadow_resistance", "/page/characterInfo/characterTab/resistances/shadow/@value"}
+                {"shadow_resistance", "/page/characterInfo/characterTab/resistances/shadow/@value"},
+                {"errorcode", "/page/characterInfo/@errCode"}
             ],
             Attribs = lists:foldl(fun({Name, Xpath}, Acc) ->
                 case xmerl_xpath:string(Xpath, Xml) of
@@ -118,6 +186,7 @@ parse_character(XmlBody) ->
             end, [], MainAttribs),
             case length(Attribs) of
                 0 -> {error, parse_error};
+                1 -> {ok, Attribs};
                 _ ->
                     Gear = parse_character_gear(Xml),
                     Skills = parse_character_skills(Xml),            
@@ -128,6 +197,12 @@ parse_character(XmlBody) ->
         _:_ -> {error, parse_arror}
     end.
 
+%% @spec parse_character_gear(Xml) -> Result
+%% where 
+%%       Xml = any()
+%%       Result = list(Gear)
+%%       Gear = {string(), string()}
+%% @doc Parse any character gear records available.
 parse_character_gear(Xml) ->
     [begin
         [#xmlAttribute{value = Id}] = xmerl_xpath:string("@id", Node),
@@ -135,6 +210,13 @@ parse_character_gear(Xml) ->
         {"slot" ++ Slot, Id}
     end|| Node <- xmerl_xpath:string("/page/characterInfo/characterTab/items/item", Xml)].
 
+
+%% @spec parse_character_skills(Xml) -> Result
+%% where 
+%%       Xml = any()
+%%       Result = list(Skill)
+%%       Skill = {string(), string()}
+%% @doc Parse any character skills available.
 parse_character_skills(Xml) ->
     [begin
         [#xmlAttribute{value = Name}] = xmerl_xpath:string("@name", Node),
@@ -142,8 +224,14 @@ parse_character_skills(Xml) ->
         {Name, Value}
     end|| Node <- xmerl_xpath:string("/page/characterInfo/characterTab/professions/skill", Xml)].
 
+%% @spec process_guild(FromPid, {RealmClass, Realm, Name}) -> ok
+%% where 
+%%       FromPid = pid()
+%%       RealmClass = string()
+%%       Realm = string()
+%%       Name = string()
+%% @doc Fetch a given guild from the armory and process the response.
 process_guild(FromPid, {RealmClass, Realm, Name}) ->
-    io:format("Processing guild ~s of ~s-~s.~n", [Name, Realm, RealmClass]),
     Response = case armory_fetch({guild, RealmClass, Realm, Name}) of
         {error, Reason} -> {error, Reason};
         {ok, Body} ->
@@ -152,6 +240,13 @@ process_guild(FromPid, {RealmClass, Realm, Name}) ->
     FromPid ! Response,
     ok.
 
+%% @spec parse_guild(XmlBody) -> Result
+%% where 
+%%       XmlBody = string()
+%%       Result = {ok, list(any())} | {error, atom()}
+%% @doc Parse a chunk of xml that supposedly represents a character. The
+%% caveat here is that the only information that is publicaly avaiable on a
+%% guild page is its member list.
 parse_guild(XmlBody) ->
     try xmerl_scan:string(XmlBody, [{quiet, true}]) of
         {Xml, _Rest} ->
@@ -169,6 +264,12 @@ parse_guild(XmlBody) ->
         _:_ -> {error, parse_arror}
     end.
 
+%% @spec parse_guild_members(Xml) -> Result
+%% where 
+%%       Xml = any()
+%%       Result = list(Skill)
+%%       Skill = {string(), string()}
+%% @doc Parse any character skills available.
 parse_guild_members(Xml) ->
     [begin
         [#xmlAttribute{value = Name}] = xmerl_xpath:string("@name", Node),
@@ -176,39 +277,17 @@ parse_guild_members(Xml) ->
         {Name, Rank}
     end|| Node <- xmerl_xpath:string("/page/guildInfo/guild/members/character", Xml)].
 
-handle_call({info}, _From, State) ->
-    {reply, State, State};
-
-handle_call({queue, Item}, From, State) ->
-    OldQueue = State#armory_state.queue,    
-    {reply, ok, State#armory_state{ queue = queue:in({From, Item}, OldQueue) }};
-
-handle_call({dequeue}, _From, State) ->
-    {Item, Queue} = case queue:out(State#armory_state.queue) of
-        {{value, I1}, Q2} -> {I1, Q2};
-        {empty, Q1} -> {empty, Q1}
-    end,
-    {reply, Item, State#armory_state{ queue = Queue }};
-
-handle_call(stop, _From, State) -> {stop, normalStop, State};
-
-handle_call(_, _From, State) -> {noreply, ok, State}.
-
-%% @private
-handle_cast(_Msg, State) -> {noreply, State}.
-
-%% @private
-handle_info(_Info, State) -> {noreply, State}.
-
-%% @private
-terminate(_Reason, _State) -> ok.
-
-%% @private
-code_change(_OldVsn, State, _Extra) -> {ok, State}.
-
 %% pragma mark -
-%% pragma mark Internal methods
+%% pragma mark fetching functions
 
+%% @spec armory_fetch(FetchData) -> Result
+%% where 
+%%       FetchData = {FetchType, RealmClass, Realm, Name}
+%%       RealmClass = string()
+%%       Realm = string()
+%%       RealmClass = string()
+%%       Name = character | guild
+%%       Result = {error, any()} | {ok, string()}
 armory_fetch(FetchData) ->
     Url = armory_url(FetchData),
     try http:request(get, {Url, [{"User-Agent", ?USER_AGENT}]}, [], []) of
@@ -218,27 +297,44 @@ armory_fetch(FetchData) ->
         _:_ -> {error, something_caught}
     end.
 
+%% @private
 armory_url({guild, "US", Realm, Name}) ->
     lists:concat(["http://www.wowarmory.com/guild-info.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]);
 
+%% @private
 armory_url({guild, "EU", Realm, Name}) ->
     lists:concat(["http://eu.wowarmory.com/guild-info.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]);
 
+%% @private
 armory_url({character, "US", Realm, Name}) ->
     lists:concat(["http://www.wowarmory.com/character-sheet.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]);
 
+%% @private
 armory_url({character, "EU", Realm, Name}) ->
     lists:concat(["http://eu.wowarmory.com/character-sheet.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]).
 
-%% Public methods
+%% pragma mark -
+%% pragma mark public functions
 
-%% armory:queue({character, {"US", "Medivh", "Korale"}}).
-%% armory:queue({character, {"US", "Medivh", "Jeanelly"}}).
-%% armory:queue({character, {"US", "Medivh", "Enyo"}}).
-%% armory:queue({character, {"US", "Medivh", "Invis"}}).
+%% @spec queue(Item) -> Result
+%% where 
+%%       Item = any()
+%%       Result = {ok, pid()}
+%% @equiv queue(Item, fun(_) -> ok end)
 queue(Item) ->
     queue(Item, fun(_) -> ok end).
 
+%% @spec queue(Item, Fun) -> Result
+%% where 
+%%       Item = {Type, {RealmClass, Realm, Name}}
+%%       Type = character | guild
+%%       RealmClass = string()
+%%       Realm = string()
+%%       Name = string()
+%%       Fun = fun()
+%%       Result = {ok, pid()}
+%% @doc Adds an item to the queue to be processed and the reponse passed to
+%% the callback function.
 queue(Item, Fun) ->
     spawn(fun() ->
         gen_server:call(pg2:get_closest_pid(armory), {queue, Item}, infinity),
@@ -247,10 +343,19 @@ queue(Item, Fun) ->
         end
     end).
 
-%% armory:info().
+%% @spec info() -> any()
+%% @doc Returns the state used by the armory queue.
+%% 
+%% This function is useful for debugging the armory server process. It will
+%% return the full state including the fetchloop process and queue as is.
 info() ->
     Resp = gen_server:call(pg2:get_closest_pid(armory), {info}, infinity),
     Resp.
 
+%% @spec dequeue() -> any()
+%% @doc Pops an item off of the list and returns it. This function should
+%% almost never be used directly as it is used by the internal fetchloop
+%% process. It can be used as a simple way to remove all items off of the
+%% queue without trying to set its state manually.
 dequeue() ->
     gen_server:call(pg2:get_closest_pid(armory), {dequeue}, infinity).
