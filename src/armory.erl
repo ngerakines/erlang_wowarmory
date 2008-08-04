@@ -137,7 +137,6 @@ process_character(FromPid, {RealmClass, Realm, Name}) ->
     Response = case armory_fetch({character, RealmClass, Realm, Name}) of
         {error, Reason} -> {error, Reason};
         {ok, Body} ->
-            io:format("body: ~p~n", [Body]),
             parse_character(Body)
     end,
     FromPid ! Response,
