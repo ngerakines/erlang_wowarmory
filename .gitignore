@@ -1,2 +1,3 @@
 *.beam
 erlang_armory
+.DS_Store
