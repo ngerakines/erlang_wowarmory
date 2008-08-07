@@ -28,7 +28,7 @@
 -module(armory).
 
 -author("Nick Gerakines <nick@gerakines.net>").
--version("0.2").
+-version("0.3").
 
 -define(FETCH_DELAY, 2000).
 -define(USER_AGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9").
@@ -154,11 +154,14 @@ parse_character(XmlBody) ->
                 {"name", "/page/characterInfo/character/@name"},
                 {"realm", "/page/characterInfo/character/@realm"},
                 {"class", "/page/characterInfo/character/@class"},
+                {"classid", "/page/characterInfo/character/@classId"},
                 {"race", "/page/characterInfo/character/@race"},
+                {"raceid", "/page/characterInfo/character/@raceId"},
                 {"level", "/page/characterInfo/character/@level"},
                 {"lastmodified", "/page/characterInfo/character/@lastModified"},
                 {"guild", "/page/characterInfo/character/@guildName"},
                 {"gender", "/page/characterInfo/character/@gender"},
+                {"genderid", "/page/characterInfo/character/@genderId"},
                 {"talent1", "/page/characterInfo/characterTab/talentSpec/@treeOne"},
                 {"talent2", "/page/characterInfo/characterTab/talentSpec/@treeTwo"},
                 {"talent3", "/page/characterInfo/characterTab/talentSpec/@treeThree"},
@@ -188,8 +191,9 @@ parse_character(XmlBody) ->
                 1 -> {ok, Attribs};
                 _ ->
                     Gear = parse_character_gear(Xml),
-                    Skills = parse_character_skills(Xml),            
-                    {ok, [ {gear, Gear}, {skills, Skills} | Attribs]}
+                    Skills = parse_character_skills(Xml),
+                    ArenaTeams = parse_character_arena_teams(Xml),
+                    {ok, [ {gear, Gear}, {skills, Skills}, {arena, ArenaTeams} | Attribs]}
             end;
         _ -> {error, parse_arror}
     catch
@@ -222,6 +226,23 @@ parse_character_skills(Xml) ->
         [#xmlAttribute{value = Value}] = xmerl_xpath:string("@value", Node),
         {Name, Value}
     end|| Node <- xmerl_xpath:string("/page/characterInfo/characterTab/professions/skill", Xml)].
+
+%% @spec parse_character_arena_teams(Xml) -> Result
+%% where 
+%%       Xml = any()
+%%       Result = list(Skill)
+%%       Team = {string(), string()}
+%% @doc Parse any character arena teams available.
+%% @todo Suck out the character's team rating.
+parse_character_arena_teams(Xml) ->
+    [begin
+        [#xmlAttribute{value = Name}] = xmerl_xpath:string("@name", Node),
+        [#xmlAttribute{value = Rating}] = xmerl_xpath:string("@rating", Node),
+        [#xmlAttribute{value = Size}] = xmerl_xpath:string("@size", Node),
+        [#xmlAttribute{value = Ranking}] = xmerl_xpath:string("@ranking", Node),
+        [#xmlAttribute{value = GamesPlayed}] = xmerl_xpath:string("@gamesPlayed", Node),
+        {Name, Size, Rating, Ranking, GamesPlayed}
+    end|| Node <- xmerl_xpath:string("/page/characterInfo/character/arenaTeams/arenaTeam", Xml)].
 
 %% @spec process_guild(FromPid, {RealmClass, Realm, Name}) -> ok
 %% where 
