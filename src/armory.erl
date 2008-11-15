@@ -294,7 +294,8 @@ parse_guild_members(Xml) ->
     [begin
         [#xmlAttribute{value = Name}] = xmerl_xpath:string("@name", Node),
         [#xmlAttribute{value = Rank}] = xmerl_xpath:string("@rank", Node),
-        {Name, Rank}
+        [#xmlAttribute{value = Level}] = xmerl_xpath:string("@level", Node),
+        {Name, Rank, Level}
     end|| Node <- xmerl_xpath:string("/page/guildInfo/guild/members/character", Xml)].
 
 %% pragma mark -
@@ -319,19 +320,19 @@ armory_fetch(FetchData) ->
 
 %% @private
 armory_url({guild, "US", Realm, Name}) ->
-    lists:concat(["http://www.wowarmory.com/guild-info.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]);
+    lists:concat(["http://www.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 
 %% @private
 armory_url({guild, "EU", Realm, Name}) ->
-    lists:concat(["http://eu.wowarmory.com/guild-info.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]);
+    lists:concat(["http://eu.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 
 %% @private
 armory_url({character, "US", Realm, Name}) ->
-    lists:concat(["http://www.wowarmory.com/character-sheet.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]);
+    lists:concat(["http://www.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 
 %% @private
 armory_url({character, "EU", Realm, Name}) ->
-    lists:concat(["http://eu.wowarmory.com/character-sheet.xml?r=", yaws_api:url_encode(Realm), "&n=", yaws_api:url_encode(Name)]).
+    lists:concat(["http://eu.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]).
 
 %% pragma mark -
 %% pragma mark public functions
@@ -342,7 +343,7 @@ armory_url({character, "EU", Realm, Name}) ->
 %%       Result = {ok, pid()}
 %% @equiv queue(Item, fun(_) -> ok end)
 queue(Item) ->
-    queue(Item, fun(_) -> ok end).
+    queue(Item, fun(X) -> io:format("~p~n", [X]) end).
 
 %% @spec queue(Item, Fun) -> Result
 %% where 
