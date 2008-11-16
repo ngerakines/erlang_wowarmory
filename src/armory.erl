@@ -274,11 +274,19 @@ parse_guild(XmlBody) ->
                 {"Name", "/page/guildKey/@name"},
                 {"Realm", "/page/guildKey/@realm"}
             ],
-            Attribs = [begin
-                [#xmlAttribute{value = Value}] = xmerl_xpath:string(Xpath, Xml), {Name, Value}
-            end|| {Name, Xpath} <- MainAttribs],
-            Members = parse_guild_members(Xml),
-            {ok, [ {members, Members} | Attribs]};
+            Attribs = lists:foldl(fun({Name, Xpath}, Acc) ->
+                case xmerl_xpath:string(Xpath, Xml) of
+                    [#xmlAttribute{value = Value}] -> [{Name, Value} | Acc];
+                    _ -> Acc
+                end
+            end, [], MainAttribs),
+            case length(Attribs) of
+                0 -> {error, parse_error};
+                1 -> {ok, Attribs};
+                _ ->
+                    Members = parse_guild_members(Xml),
+                    {ok, [{members, Members} | Attribs]}
+            end;
         _ -> {error, parse_arror}
     catch
         _:_ -> {error, parse_arror}
