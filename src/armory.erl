@@ -23,14 +23,14 @@
 %% 
 %% @author Nick Gerakines <nick@gerakines.net>
 %% @copyright 2008 Nick Gerakines
-%% @version 0.1
+%% @version 0.4
 %% @doc Provides access to the World of Warcraft Armory.
 -module(armory).
 
 -author("Nick Gerakines <nick@gerakines.net>").
--version("0.3").
+-version("0.4").
 
--define(FETCH_DELAY, 2000).
+-define(FETCH_DELAY, 2500).
 -define(USER_AGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9").
 -define(ACCEPT_CHARSET, "utf-8").
 
@@ -65,12 +65,12 @@ start() ->
 
 %% @private
 init(_) ->
-    process_flag(trap_exit, true),
     ok = pg2:create(armory),
     ok = pg2:join(armory, self()),
+    PidFetchLoop = spawn_link(?MODULE, fetchloop, []),
     {ok, #armory_state{
         queue = queue:new(),
-        fetchloop = spawn(?MODULE, fetchloop, [])}
+        fetchloop = PidFetchLoop}
     }.
 
 %% @private
