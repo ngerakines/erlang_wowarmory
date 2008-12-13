@@ -4,12 +4,7 @@ code: clean
 	erlc src/armory.erl
 
 clean:
-	rm -rfv *.beam *.rel *.script *.boot erl_crash.dump erlang_armory/ *.deb
+	rm -rfv *.beam erl_crash.dump
 
-package-debian: code
-	mkdir -p erlang_armory/usr/lib/erlang/lib/armory-0.1/ebin/ && cp armory.beam erlang_armory/usr/lib/erlang/lib/armory-0.1/ebin/armory.beam
-	mkdir -p erlang_armory/DEBIAN/ && cp control erlang_armory/DEBIAN/control
-	dpkg -b erlang_armory erlang_armory.deb
-
-install-debian: package-debian
-	dpkg -i erlang_armory.deb
+dist-src: clean
+	tar zcf erlang_wowarmory-0.4.tgz Makefile src/

@@ -21,6 +21,11 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 %% 
+%% Changes
+%% - 2008-12-13 ngerakines
+%%   - Documentation updaets
+%%   - Misc package changes and cleanup
+%% 
 %% @author Nick Gerakines <nick@gerakines.net>
 %% @copyright 2008 Nick Gerakines
 %% @version 0.4
@@ -60,13 +65,10 @@ start() ->
     inets:start(),
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-%% pragma mark -
-%% pragma mark gen_server functions
-
 %% @private
 init(_) ->
-    ok = pg2:create(armory),
-    ok = pg2:join(armory, self()),
+    ok = pg2:create(wowarmory_grp),
+    ok = pg2:join(wowarmory_grp, self()),
     PidFetchLoop = spawn_link(?MODULE, fetchloop, []),
     {ok, #armory_state{
         queue = queue:new(),
@@ -116,15 +118,12 @@ fetchloop() ->
             armory:process_character(FromPid, CharacterData);
         {{FromPid, _FromRef}, {guild, GuildData}} ->
             armory:process_guild(FromPid, GuildData);
-        _ -> timer:sleep(?FETCH_DELAY * 3)
+        Other -> io:format("Unknown queue item: ~p~n", [Other]), ok
     catch
         _:_ -> {error, parse_arror}
     end,
     timer:sleep(?FETCH_DELAY),
     armory:fetchloop().
-
-%% pragma mark -
-%% pragma mark processing and parsing functions
 
 %% @spec process_character(FromPid, {RealmClass, Realm, Name}) -> ok
 %% where 
@@ -212,7 +211,6 @@ parse_character_gear(Xml) ->
         [#xmlAttribute{value = Slot}] = xmerl_xpath:string("@slot", Node),
         {"slot" ++ Slot, Id}
     end|| Node <- xmerl_xpath:string("/page/characterInfo/characterTab/items/item", Xml)].
-
 
 %% @spec parse_character_skills(Xml) -> Result
 %% where 
@@ -306,9 +304,6 @@ parse_guild_members(Xml) ->
         {Name, Rank, Level}
     end|| Node <- xmerl_xpath:string("/page/guildInfo/guild/members/character", Xml)].
 
-%% pragma mark -
-%% pragma mark fetching functions
-
 %% @spec armory_fetch(FetchData) -> Result
 %% where 
 %%       FetchData = {FetchType, RealmClass, Realm, Name}
@@ -329,29 +324,23 @@ armory_fetch(FetchData) ->
 %% @private
 armory_url({guild, "US", Realm, Name}) ->
     lists:concat(["http://www.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-
-%% @private
 armory_url({guild, "EU", Realm, Name}) ->
     lists:concat(["http://eu.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-
-%% @private
 armory_url({character, "US", Realm, Name}) ->
     lists:concat(["http://www.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-
-%% @private
 armory_url({character, "EU", Realm, Name}) ->
     lists:concat(["http://eu.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]).
-
-%% pragma mark -
-%% pragma mark public functions
 
 %% @spec queue(Item) -> Result
 %% where 
 %%       Item = any()
 %%       Result = {ok, pid()}
-%% @equiv queue(Item, fun(_) -> ok end)
+%% @doc Adds an item to the queue and waits for the item to finish processing.
+%% This function will wait indefinitely for the response to come.
 queue(Item) ->
-    queue(Item, fun(X) -> io:format("~p~n", [X]) end).
+    Self = self(),
+    queue(Item, fun(X) -> Self ! X end),
+    receive Data -> Data end.
 
 %% @spec queue(Item, Fun) -> Result
 %% where 
@@ -366,11 +355,32 @@ queue(Item) ->
 %% the callback function.
 queue(Item, Fun) ->
     spawn(fun() ->
-        gen_server:call(pg2:get_closest_pid(armory), {queue, Item}, infinity),
+        gen_server:call(pg2:get_closest_pid(wowarmory_grp), {queue, Item}, infinity),
         receive X ->
             Fun(X)
         end
     end).
+
+%% @spec queue(Item, Fun) -> Result
+%% where 
+%%       Item = {Type, {RealmClass, Realm, Name}}
+%%       Type = character | guild
+%%       RealmClass = string()
+%%       Realm = string()
+%%       Name = string()
+%%       Fun = fun()
+%%       Result = {ok, pid()}
+%% @doc Waits for an item sent to the queue to be processed by a given
+%% callback function.
+queuew(Item, Fun) ->
+    Self = self(),
+    spawn(fun() ->
+        gen_server:call(pg2:get_closest_pid(wowarmory_grp), {queue, Item}, infinity),
+        receive X ->
+            Self ! Fun(X)
+        end
+    end),
+    receive Data -> Data.
 
 %% @spec info() -> any()
 %% @doc Returns the state used by the armory queue.
@@ -378,8 +388,7 @@ queue(Item, Fun) ->
 %% This function is useful for debugging the armory server process. It will
 %% return the full state including the fetchloop process and queue as is.
 info() ->
-    Resp = gen_server:call(pg2:get_closest_pid(armory), {info}, infinity),
-    Resp.
+    gen_server:call(pg2:get_closest_pid(wowarmory_grp), {info}, infinity).
 
 %% @spec dequeue() -> any()
 %% @doc Pops an item off of the list and returns it. This function should
@@ -387,4 +396,4 @@ info() ->
 %% process. It can be used as a simple way to remove all items off of the
 %% queue without trying to set its state manually.
 dequeue() ->
-    gen_server:call(pg2:get_closest_pid(armory), {dequeue}, infinity).
+    gen_server:call(pg2:get_closest_pid(wowarmory_grp), {dequeue}, infinity).
