@@ -361,7 +361,7 @@ queue(Item, Fun) ->
         end
     end).
 
-%% @spec queue(Item, Fun) -> Result
+%% @spec queuew(Item, Fun) -> Result
 %% where 
 %%       Item = {Type, {RealmClass, Realm, Name}}
 %%       Type = character | guild
@@ -380,7 +380,7 @@ queuew(Item, Fun) ->
             Self ! Fun(X)
         end
     end),
-    receive Data -> Data.
+    receive Data -> Data end.
 
 %% @spec info() -> any()
 %% @doc Returns the state used by the armory queue.
