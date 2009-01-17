@@ -22,6 +22,8 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 %% 
 %% Changes
+%% - 2009-01-16 ngerakines
+%%   - Added queue_length/0 function
 %% - 2008-12-13 ngerakines
 %%   - Documentation updaets
 %%   - Misc package changes and cleanup
@@ -35,7 +37,7 @@
 -author("Nick Gerakines <nick@gerakines.net>").
 -version("0.4").
 
--define(FETCH_DELAY, 2500).
+-define(FETCH_DELAY, 2000).
 -define(USER_AGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9").
 -define(ACCEPT_CHARSET, "utf-8").
 
@@ -46,14 +48,12 @@
 ]).
 
 %% public API exports
--export([start/0, queue/1, queue/2, info/0, dequeue/0]).
+-export([start/0, queue/1, queue/2, info/0, dequeue/0, queue_length/0]).
 
 %% internal exports
 -export([fetchloop/0, process_character/2, parse_character/1, parse_character_gear/1]).
 -export([parse_character_skills/1, process_guild/2, parse_guild/1, parse_guild_members/1]).
 -export([armory_url/1, armory_fetch/1]).
-
--compile(export_all).
 
 -include_lib("xmerl/include/xmerl.hrl").
 
@@ -118,9 +118,9 @@ fetchloop() ->
             armory:process_character(FromPid, CharacterData);
         {{FromPid, _FromRef}, {guild, GuildData}} ->
             armory:process_guild(FromPid, GuildData);
-        Other -> io:format("Unknown queue item: ~p~n", [Other]), ok
+        Other -> ok
     catch
-        _:_ -> {error, parse_arror}
+        _:_ -> {error, queue_error}
     end,
     timer:sleep(?FETCH_DELAY),
     armory:fetchloop().
@@ -397,3 +397,15 @@ info() ->
 %% queue without trying to set its state manually.
 dequeue() ->
     gen_server:call(pg2:get_closest_pid(wowarmory_grp), {dequeue}, infinity).
+
+%% @spec queue_length() -> integer()
+%% @doc Returns the total number of items in all armory queues.
+queue_length() ->
+    lists:foldl(
+        fun(Pid, Count) ->
+            {_, _, X} = gen_server:call(Pid, {info}, infinity),
+            queue:len(X) + Count
+        end,
+        0,
+        pg2:get_members(wowarmory_grp)
+    ).
