@@ -22,6 +22,8 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 %% 
 %% Changes
+%% - 2009-02-01 ngerakines
+%%   - Added support for fetching achievement summary information
 %% - 2009-01-16 ngerakines
 %%   - Added queue_length/0 function
 %% - 2008-12-13 ngerakines
@@ -35,7 +37,7 @@
 -module(armory).
 
 -author("Nick Gerakines <nick@gerakines.net>").
--version("0.4").
+-version("0.4.1").
 
 -define(FETCH_DELAY, 2000).
 -define(USER_AGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9").
@@ -133,7 +135,7 @@ fetchloop() ->
 %%       RealmClass = string()
 %%       Realm = string()
 %%       Name = string()
-%% @doc Fetch a given character from the armory and process the response.
+%% @doc Fetch a character from the armory and process the response.
 process_character(FromPid, {RealmClass, Realm, Name}) ->
     Response = case armory_fetch({character, RealmClass, Realm, Name}) of
         {error, Reason} -> {error, Reason};
@@ -143,6 +145,13 @@ process_character(FromPid, {RealmClass, Realm, Name}) ->
     FromPid ! Response,
     ok.
 
+%% @spec process_achievement_summary(FromPid, {RealmClass, Realm, Name}) -> ok
+%% where 
+%%       FromPid = pid()
+%%       RealmClass = string()
+%%       Realm = string()
+%%       Name = string()
+%% @doc Fetch and process a character's achievement summary from the armory.
 process_achievement_summary(FromPid, {RealmClass, Realm, Name}) ->
     Response = case armory_fetch({achievement_summary, RealmClass, Realm, Name}) of
         {error, Reason} -> {error, Reason};
@@ -152,6 +161,12 @@ process_achievement_summary(FromPid, {RealmClass, Realm, Name}) ->
     FromPid ! Response,
     ok.
 
+%% @spec parse_achievement_summary(XmlBody) -> Result
+%% where 
+%%       XmlBody = string()
+%%       Result = {ok, list(any())} | {error, atom()}
+%% @doc Parse a chunk of xml that supposedly represents a character's recent
+%% achievement summary.
 parse_achievement_summary(XmlBody) ->
     try xmerl_scan:string(XmlBody, [{quiet, true}]) of
         {Xml, _Rest} ->
@@ -236,6 +251,11 @@ parse_character(XmlBody) ->
         _:_ -> {error, parse_arror}
     end.
 
+%% @spec parse_summary_achievements(Xml) -> Result
+%%       where Xml = any()
+%%       Result = list(Achivement)
+%%       Achivement = {Category, CompletedDate, Description, Icon, ID, Points, Title}
+%% @doc Parse any achievement records available.
 parse_summary_achievements(Xml) ->
     [begin
         [#xmlAttribute{value = CategoryID}] = xmerl_xpath:string("@categoryId", Node),
@@ -331,7 +351,8 @@ parse_guild(XmlBody) ->
                 0 -> {error, parse_error};
                 1 -> {ok, Attribs};
                 _ ->
-                    Members = parse_guild_members(Xml),
+                    Members = try parse_guild_members(Xml) of
+                        
                     {ok, [{members, Members} | Attribs]}
             end;
         _ -> {error, parse_arror}
