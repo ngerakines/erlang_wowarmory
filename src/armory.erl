@@ -156,7 +156,7 @@ process_achievement_summary(FromPid, {RealmClass, Realm, Name}) ->
     Response = case armory_fetch({achievement_summary, RealmClass, Realm, Name}) of
         {error, Reason} -> {error, Reason};
         {ok, Body} ->
-            parse_achievement_summary(Body)
+		try parse_achievement_summary(Body) catch _:_ -> {error, parse_error} end
     end,
     FromPid ! Response,
     ok.
