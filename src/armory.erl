@@ -351,8 +351,7 @@ parse_guild(XmlBody) ->
                 0 -> {error, parse_error};
                 1 -> {ok, Attribs};
                 _ ->
-                    Members = try parse_guild_members(Xml) of
-                        
+                    Members = parse_guild_members(Xml),
                     {ok, [{members, Members} | Attribs]}
             end;
         _ -> {error, parse_arror}
