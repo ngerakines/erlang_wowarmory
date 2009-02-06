@@ -27,16 +27,17 @@ The I Play WoW Facebook application uses this module as-is. Not all character an
 The data structure sent to the callback function is either an error tuple or
 an ok tuple.
 
-    `{ok, list()}`
-    `{error, term()}`
+    {ok, list()}
+    {error, term()}
 
 An error tuple indicates that there was an error either in fetching the data or parsing the response. This could be due to http level issues (closed connection, server down, etc) or invalid xml being parsed.
 
 An ok tuple indicates that the page was requested and presented but can also indicate an error. Currently there are only two cases where this can happen.
 
-* The character exists but is below the minimum character requirement for presentation in the armory.
-* The character doesn't exist.
+ * The character exists but is below the minimum character requirement for presentation in the armory.
+ * The character doesn't exist.
+ *
 
 For both cases he return value will be something like:
 
-    `{ok,[{"errorcode","noCharacter"}]}`
+    {ok,[{"errorcode","noCharacter"}]}
