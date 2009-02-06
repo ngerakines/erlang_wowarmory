@@ -4,6 +4,7 @@ all: code
 
 code: clean
 	erlc src/armory.erl
+	erlc src/armory2.erl
 
 clean:
 	rm -rfv *.beam erl_crash.dump
