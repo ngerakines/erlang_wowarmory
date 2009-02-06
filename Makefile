@@ -15,4 +15,4 @@ dist-src: clean
 
 install: all
 	mkdir -p ${LIBDIR}/armory/ebin
-	for i in *.beam; do install $$i $(LIBDIR)/armory-0.4.1/ebin/$$i ; done
+	for i in *.beam; do install $$i $(LIBDIR)/armory/ebin/$$i ; done
