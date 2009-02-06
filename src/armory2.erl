@@ -77,7 +77,6 @@ start_crawler() ->
     crawler_loop().
 
 crawler_loop() ->
-    io:format("crawler_loop/0~n"),
     try armory2:dequeue() of
         [{_, FromPid, {character, CharacterData}}] ->
             armory:process_character(FromPid, CharacterData);
@@ -102,10 +101,6 @@ dequeue() ->
             bootstrap_queue(),
             empty;
         Queue ->
-            io:format("Getting queue item from ~p~n", [Queue]),
             Queue ! {self(), dequeue},
-            receive X -> X after 10000 ->
-                io:format("Had to wait, returning empty handed.~n"),
-                empty
-            end
+            receive X -> X end
     end.
