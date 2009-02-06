@@ -1,3 +1,4 @@
+
 Armory is a lightweight crawler for the World of Warcraft Armory. It provides a number of methods to queue requests, monitor the request queue and process armory data. This module has several restrictions in place to allow developers to pull data from the World of Warcraft armory in a safe, throttled way.
 
     1> armory:start().

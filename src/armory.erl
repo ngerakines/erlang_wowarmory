@@ -56,6 +56,7 @@
 -export([fetchloop/0, process_character/2, parse_character/1, parse_character_gear/1]).
 -export([parse_character_skills/1, process_guild/2, parse_guild/1, parse_guild_members/1]).
 -export([armory_url/1, armory_fetch/1, process_achievement_summary/2, queuew/2]).
+-export([csr/3]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 
@@ -482,3 +483,20 @@ queue_length() ->
         0,
         pg2:get_members(wowarmory_grp)
     ).
+
+%% @spec csr(A, B, C) -> item()
+%%       A = string() | binary()
+%%       B = string() | binary()
+%%       C = string() | binary()
+csr(A, B, C) when is_binary(A) ->
+    csr(binary_to_list(A), B, C);
+csr(A, B, C) when is_binary(B) ->
+    csr(A, binary_to_list(B), C);
+csr(A, B, C) when is_binary(C) ->
+    csr(A, B, binary_to_list(A));
+csr(A, B, "US") ->
+    csr("US", B, A);
+csr(A, B, "EU") ->
+    csr("EU", B, A);
+csr(A, B, C) ->
+    {A, B, C}.
