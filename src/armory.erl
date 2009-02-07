@@ -39,7 +39,7 @@
 -author("Nick Gerakines <nick@gerakines.net>").
 -version("0.4.1").
 
--define(FETCH_DELAY, 2000).
+-define(FETCH_DELAY, 1500).
 -define(USER_AGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9").
 -define(ACCEPT_CHARSET, "utf-8").
 

@@ -60,6 +60,8 @@
 
 -record(armory_queue, {queue = []}).
 
+-define(FETCH_DELAY, 1500).
+
 %% @doc Returns a locally registered crawler pid().
 start() ->
     inets:start(),
@@ -168,7 +170,7 @@ crawler_loop() ->
     catch
         _:_ -> {error, queue_error}
     end,
-    timer:sleep(10000),
+    timer:sleep(?FETCH_DELAY),
     crawler_loop().
 
 %% @spec dequeue() -> [item()] | empty
