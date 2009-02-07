@@ -56,7 +56,7 @@
 -export([start/0]).
 -export([queue/1, queue/2, bootstrap_queue/0, bootstrap_crawler/0]).
 -export([start_queue/0, start_crawler/0, queue_loop/1, crawler_loop/0]).
--export([dequeue/0, queue_info/0, queue_length0]).
+-export([dequeue/0, queue_info/0, queue_length/0]).
 
 -record(armory_queue, {queue = []}).
 
