@@ -56,7 +56,7 @@
 -export([start/0]).
 -export([queue/1, queue/2, bootstrap_queue/0, bootstrap_crawler/0]).
 -export([start_queue/0, start_crawler/0, queue_loop/1, crawler_loop/0]).
--export([dequeue/0, queue_info/0]).
+-export([dequeue/0, queue_info/0, queue_length0]).
 
 -record(armory_queue, {queue = []}).
 
@@ -194,4 +194,14 @@ queue_info() ->
         Queue ->
             Queue ! {self(), info},
             receive X -> X end
+    end.
+
+%% @doc Returns the current queue length if possible. This function exists to
+%% provide backwards compatability.
+queue_length() ->
+    case armory2:queue_info() of
+        none -> 0;
+        Data when is_list(Data) ->
+            proplists:get_value(size, Data, 0);
+        _ -> 0
     end.
