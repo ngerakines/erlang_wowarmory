@@ -119,6 +119,8 @@ fetchloop() ->
     try armory:dequeue() of
         {{FromPid, _FromRef}, {character, CharacterData}} ->
             armory:process_character(FromPid, CharacterData);
+        {{FromPid, _FromRef}, {character_achievements, CharacterData}} ->
+            armory:process_character_achievements(FromPid, CharacterData);
         {{FromPid, _FromRef}, {achievement_summary, CharacterData}} ->
             armory:process_achievement_summary(FromPid, CharacterData);
         {{FromPid, _FromRef}, {guild, GuildData}} ->
@@ -142,6 +144,15 @@ process_character(FromPid, {RealmClass, Realm, Name}) ->
         {error, Reason} -> {error, Reason};
         {ok, Body} ->
             parse_character(Body)
+    end,
+    FromPid ! Response,
+    ok.
+
+process_character_achievements(FromPid, {RealmClass, Realm, Name}) ->
+    Response = case armory_fetch({achievement_summary, RealmClass, Realm, Name}) of
+        {error, Reason} -> {error, Reason};
+        {ok, Body} ->
+		try parse_achievement_summary(Body) catch _:_ -> {error, parse_error} end
     end,
     FromPid ! Response,
     ok.
@@ -206,6 +217,7 @@ parse_character(XmlBody) ->
                 {"name", "/page/characterInfo/character/@name"},
                 {"realm", "/page/characterInfo/character/@realm"},
                 {"class", "/page/characterInfo/character/@class"},
+                {"points", "/page/characterInfo/character/@points"},
                 {"classid", "/page/characterInfo/character/@classId"},
                 {"race", "/page/characterInfo/character/@race"},
                 {"raceid", "/page/characterInfo/character/@raceId"},
