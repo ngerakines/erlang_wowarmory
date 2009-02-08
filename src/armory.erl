@@ -56,7 +56,7 @@
 -export([fetchloop/0, process_character/2, parse_character/1, parse_character_gear/1]).
 -export([parse_character_skills/1, process_guild/2, parse_guild/1, parse_guild_members/1]).
 -export([armory_url/1, armory_fetch/1, process_achievement_summary/2, queuew/2]).
--export([csr/3]).
+-export([csr/3, process_character_achievements/2, parse_summary_achievements/1, parse_achievements/1]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 
@@ -149,12 +149,23 @@ process_character(FromPid, {RealmClass, Realm, Name}) ->
     ok.
 
 process_character_achievements(FromPid, {RealmClass, Realm, Name}) ->
-    Response = case armory_fetch({achievement_summary, RealmClass, Realm, Name}) of
-        {error, Reason} -> {error, Reason};
-        {ok, Body} ->
-		try parse_achievement_summary(Body) catch _:_ -> {error, parse_error} end
-    end,
-    FromPid ! Response,
+    Response = lists:foldl(
+        fun(Category, Acc) ->
+            timer:sleep(?FETCH_DELAY),
+            case armory_fetch({achievements, Category, RealmClass, Realm, Name}) of
+                {error, Reason} -> {error, Reason};
+                {ok, Body} ->
+        		    try parse_achievements(Body) of
+        		        X -> [X | Acc]
+        		    catch
+        		        _:_ -> Acc
+        		    end
+            end
+        end,
+        [],
+        [92, 96, 97, 95, 168, 169, 201, 155, 81]
+    ),
+    FromPid ! lists:flatten(Response),
     ok.
 
 %% @spec process_achievement_summary(FromPid, {RealmClass, Realm, Name}) -> ok
@@ -204,6 +215,16 @@ parse_achievement_summary(XmlBody) ->
     catch
         _:_ -> {error, parse_arror}
     end.
+
+parse_achievements(XmlBody) ->
+    try xmerl_scan:string(XmlBody, []) of %% {quiet, true}
+        {Xml, _Rest} ->
+            parse_summary_achievements(Xml);
+        _ -> {error, parse_arror}
+    catch
+        _:_ -> {error, parse_arror}
+    end.
+
 
 %% @spec parse_character(XmlBody) -> Result
 %% where 
@@ -270,16 +291,23 @@ parse_character(XmlBody) ->
 %%       Achivement = {Category, CompletedDate, Description, Icon, ID, Points, Title}
 %% @doc Parse any achievement records available.
 parse_summary_achievements(Xml) ->
-    [begin
-        [#xmlAttribute{value = CategoryID}] = xmerl_xpath:string("@categoryId", Node),
-        [#xmlAttribute{value = Completed}] = xmerl_xpath:string("@dateCompleted", Node),
-        [#xmlAttribute{value = Desc}] = xmerl_xpath:string("@desc", Node),
-        [#xmlAttribute{value = Icon}] = xmerl_xpath:string("@icon", Node),
-        [#xmlAttribute{value = Id}] = xmerl_xpath:string("@id", Node),
-        [#xmlAttribute{value = Points}] = xmerl_xpath:string("@points", Node),
-        [#xmlAttribute{value = Title}] = xmerl_xpath:string("@title", Node),
-        {CategoryID, Completed, Desc, Icon, Id, Points, Title}
-    end|| Node <- xmerl_xpath:string("/page/achievements/summary/achievement", Xml)].
+    lists:foldl(
+        fun(Node, Acc) ->
+            case xmerl_xpath:string("/achievement/@dateCompleted", Node) of
+                [] -> Acc;
+                [#xmlAttribute{value = Completed}] ->
+                    [#xmlAttribute{value = CategoryID}] = xmerl_xpath:string("/achievement/@categoryId", Node),
+                    [#xmlAttribute{value = Desc}] = xmerl_xpath:string("/achievement/@desc", Node),
+                    [#xmlAttribute{value = Icon}] = xmerl_xpath:string("/achievement/@icon", Node),
+                    [#xmlAttribute{value = Id}] = xmerl_xpath:string("/achievement/@id", Node),
+                    [#xmlAttribute{value = Points}] = xmerl_xpath:string("/achievement/@points", Node),
+                    [#xmlAttribute{value = Title}] = xmerl_xpath:string("/achievement/@title", Node),
+                    [{CategoryID, Completed, Desc, Icon, Id, Points, Title} | Acc]
+            end
+        end,
+        [],
+        xmerl_xpath:string("//achievement", Xml)
+    ).
 
 %% @spec parse_character_gear(Xml) -> Result
 %% where 
@@ -405,17 +433,21 @@ armory_fetch(FetchData) ->
 
 %% @private
 armory_url({guild, "US", Realm, Name}) ->
-    lists:concat(["http://www.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
+    lists:concat(["http://us.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 armory_url({guild, "EU", Realm, Name}) ->
     lists:concat(["http://eu.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 armory_url({achievement_summary, "US", Realm, Name}) ->
-    lists:concat(["http://www.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
+    lists:concat(["http://us.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 armory_url({achievement_summary, "EU", Realm, Name}) ->
     lists:concat(["http://eu.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 armory_url({character, "US", Realm, Name}) ->
-    lists:concat(["http://www.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
+    lists:concat(["http://us.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
 armory_url({character, "EU", Realm, Name}) ->
-    lists:concat(["http://eu.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]).
+    lists:concat(["http://eu.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
+armory_url({achievements, Category, "US", Realm, Name}) ->
+    lists:concat(["http://us.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name), "&categoryId=", Category]);
+armory_url({achievements, Category, "EU", Realm, Name}) ->
+    lists:concat(["http://eu.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name), "&categoryId=", Category]).
 
 %% @spec queue(Item) -> Result
 %% where 
