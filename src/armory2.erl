@@ -126,7 +126,7 @@ queue_loop(State) ->
     armory2:queue_loop(State).
 
 %% @private
-fetch() -> fetch([character, guild, achievement_summary]).
+fetch() -> fetch([character, guild, achievement_summary, character_achievements]).
 fetch([]) -> empty;
 fetch([Type | Tail]) ->
     case ets:match(armory_queue, {'$1', '_', {Type, '_'}}, 1) of
@@ -162,6 +162,8 @@ crawler_loop() ->
             armory:process_achievement_summary(FromPid, CharacterData);
         [{_, FromPid, {guild, GuildData}}] ->
             armory:process_guild(FromPid, GuildData);
+        [{_, FromPid, {character_achievements, CharacterData}}] ->
+            armory:process_character_achievements(FromPid, CharacterData);
         empty ->
             ok;
         Other ->

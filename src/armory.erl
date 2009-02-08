@@ -56,7 +56,7 @@
 -export([fetchloop/0, process_character/2, parse_character/1, parse_character_gear/1]).
 -export([parse_character_skills/1, process_guild/2, parse_guild/1, parse_guild_members/1]).
 -export([armory_url/1, armory_fetch/1, process_achievement_summary/2, queuew/2]).
--export([csr/3, process_character_achievements/2, parse_summary_achievements/1, parse_achievements/1]).
+-export([csr/3, process_character_achievements/2, armory_url/4]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 
@@ -432,22 +432,23 @@ armory_fetch(FetchData) ->
     end.
 
 %% @private
-armory_url({guild, "US", Realm, Name}) ->
-    lists:concat(["http://us.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-armory_url({guild, "EU", Realm, Name}) ->
-    lists:concat(["http://eu.wowarmory.com/guild-info.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-armory_url({achievement_summary, "US", Realm, Name}) ->
-    lists:concat(["http://us.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-armory_url({achievement_summary, "EU", Realm, Name}) ->
-    lists:concat(["http://eu.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-armory_url({character, "US", Realm, Name}) ->
-    lists:concat(["http://us.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-armory_url({character, "EU", Realm, Name}) ->
-    lists:concat(["http://eu.wowarmory.com/character-sheet.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name)]);
-armory_url({achievements, Category, "US", Realm, Name}) ->
-    lists:concat(["http://us.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name), "&categoryId=", Category]);
-armory_url({achievements, Category, "EU", Realm, Name}) ->
-    lists:concat(["http://eu.wowarmory.com/character-achievements.xml?r=", mochiweb_util:quote_plus(Realm), "&n=", mochiweb_util:quote_plus(Name), "&categoryId=", Category]).
+armory_url({guild, Locale, Realm, Name}) ->
+    armory_url(Locale, "guild", "info", [{r, Realm}, {n, Name}]);
+armory_url({character, Locale, Realm, Name}) ->
+    armory_url(Locale, "character", "sheet", [{r, Realm}, {n, Name}]);
+armory_url({achievement_summary, Locale, Realm, Name}) ->
+    armory_url(Locale, "character", "achievements", [{r, Realm}, {n, Name}]);
+armory_url({achievements, Category, Locale, Realm, Name}) ->
+    armory_url(Locale, "character", "achievements", [{r, Realm}, {n, Name}, {"categoryId", Category}]).
+%% @private
+armory_url(Locale, Type, Area, Args) ->
+    lists:flatten(
+        io_lib:format(
+            "http://~s.wowarmory.com/~s-~s.xml?",
+            [Locale, Type, Area]
+        ) ++ mochiweb_util:urlencode(Args)
+    ).
+
 
 %% @spec queue(Item) -> Result
 %% where 
