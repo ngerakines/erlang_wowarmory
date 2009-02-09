@@ -55,10 +55,8 @@
 
 -export([start/0]).
 -export([queue/1, queue/2, bootstrap_queue/0, bootstrap_crawler/0]).
--export([start_queue/0, start_crawler/0, queue_loop/1, crawler_loop/0]).
+-export([start_queue/0, start_crawler/0, queue_loop/0, crawler_loop/0]).
 -export([dequeue/0, queue_info/0, queue_length/0]).
-
--record(armory_queue, {queue = []}).
 
 -define(FETCH_DELAY, 1500).
 
@@ -107,10 +105,10 @@ start_queue() ->
     global:register_name(armory_queue, self()),
     ets:new(armory_queue, [ordered_set, named_table, protected]),
     proc_lib:init_ack(ok),
-    armory2:queue_loop(#armory_queue{}).
+    armory2:queue_loop().
 
 %% @private
-queue_loop(State) ->
+queue_loop() ->
     receive
         {From, queue, Item} ->
             ets:insert(
@@ -123,7 +121,7 @@ queue_loop(State) ->
         {From, info} ->
             From ! ets:info(armory_queue)
     end,
-    armory2:queue_loop(State).
+    armory2:queue_loop().
 
 %% @private
 fetch() -> fetch([character, guild, achievement_summary, character_achievements]).
@@ -189,6 +187,9 @@ dequeue() ->
             receive X -> X end
     end.
 
+%% @spec queue_info() -> Result
+%%       Result = [Options]
+%%       Options = {memory, integer()} | {owner, pid()}, {name, atom()} | {size, integer()} | {node, atom()} | {type, atom()} | {keypos, integer()} | {protection, atom()}
 %% @doc Returns information about the queue process's ets table.
 queue_info() ->
     case global:whereis_name(armory_queue) of
@@ -200,6 +201,7 @@ queue_info() ->
             receive X -> X end
     end.
 
+%% @spec queue_length() -> integer()
 %% @doc Returns the current queue length if possible. This function exists to
 %% provide backwards compatability.
 queue_length() ->
