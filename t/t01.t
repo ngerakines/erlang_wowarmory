@@ -17,7 +17,6 @@ main(_) ->
     etap_can:can_ok(armory, queue_length),
     etap_can:can_ok(armory, queue_length, 0),
     
-    
     {Status, ArmoryProcess} = armory:start(),
     etap:is(Status, ok, "armory:start/0 ok"),
     etap_application:pg2_group_exists(wowarmory_grp, "pg2 group wowarmory_grp exists"),

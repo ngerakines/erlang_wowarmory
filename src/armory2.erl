@@ -108,6 +108,8 @@ start_queue() ->
     armory2:queue_loop().
 
 %% @private
+%% @doc The loop used by the queue process to handle the popping and pushing
+%% of items to and from the queue.
 queue_loop() ->
     receive
         {From, queue, Item} ->
@@ -124,6 +126,7 @@ queue_loop() ->
     armory2:queue_loop().
 
 %% @private
+%% @doc Pops an item off of the queue, ording the items by importance.
 fetch() -> fetch([character, guild, achievement_summary, character_achievements]).
 fetch([]) -> empty;
 fetch([Type | Tail]) ->
@@ -145,6 +148,7 @@ bootstrap_crawler() ->
     end.
 
 %% @private
+%% @doc Starts a local crawler process and registers the name on the node.
 start_crawler() ->
     error_logger:info_report([armory_crawler, start_queue]),
     register(armory_crawler, self()),
@@ -152,6 +156,9 @@ start_crawler() ->
     crawler_loop().
 
 %% @private
+%% @doc The loop used by the local crawler process to dequeue work and act on
+%% it. At this point the only items processable are character,
+%% achievement_summary, guild and character_achievements.
 crawler_loop() ->
     try armory2:dequeue() of
         [{_, FromPid, {character, CharacterData}}] ->
