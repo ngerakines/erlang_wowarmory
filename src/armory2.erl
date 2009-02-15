@@ -58,7 +58,7 @@
 -export([start_queue/0, start_crawler/0, queue_loop/0, crawler_loop/0]).
 -export([dequeue/0, queue_info/0, queue_length/0]).
 
--define(FETCH_DELAY, 1500).
+-define(FETCH_DELAY, 2000).
 
 %% @doc Returns a locally registered crawler pid().
 start() ->
