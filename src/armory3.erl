@@ -26,7 +26,6 @@
 %%   - Initial release
 %%
 %% @todo Handle priority queues
-%% @todo Determine if the timer:sleep/1 model will fill process inboxes until they explode.
 -module(armory3).
 -compile(export_all).
 
@@ -42,7 +41,6 @@ start() ->
     bootstrap_queue(),
     bootstrap_crawler(),
     whereis(armory_crawler).
-
 
 %% @spec queue(Item) -> pid()
 %% @equiv queue(Item, fun(_) -> ok end)
@@ -80,19 +78,21 @@ start_queue() ->
     X = uuid(),
     {'exchange.declare_ok'} = lib_amqp:declare_exchange(Channel, X),
     RoutingKey = uuid(),
-    armory3:queue_loop({Channel, X, RoutingKey}).
+    Q = lib_amqp:declare_queue(Channel),
+    lib_amqp:bind_queue(Channel, X, Q, RoutingKey),
+    armory3:queue_loop({Channel, X, RoutingKey, Q}).
 
 %% @private
 %% @doc The loop used by the queue process to handle the popping and pushing
 %% of items to and from the queue.
-queue_loop({Channel, X, RoutingKey}) ->
+queue_loop({Channel, X, RoutingKey, Q}) ->
     receive
         {From, queue, Item} ->
             lib_amqp:publish(Channel, X, RoutingKey, erlang:term_to_binary({From, Item}));
         {From, info} ->
-            From ! {Channel, X, RoutingKey}
+            From ! {Channel, X, RoutingKey, Q}
     end,
-    armory3:queue_loop({Channel, X, RoutingKey}).
+    armory3:queue_loop({Channel, X, RoutingKey, Q}).
 
 uuid() ->
     {A, B, C} = now(),
@@ -117,7 +117,7 @@ bootstrap_crawler() ->
     case whereis(armory_crawler) of
         undefined ->
             case ?MODULE:info() of
-                {Channel, X, RoutingKey} -> proc_lib:start_link(?MODULE, start_crawler, [{Channel, X, RoutingKey}]);
+                {Channel, X, RoutingKey, Q} -> proc_lib:start_link(?MODULE, start_crawler, [{Channel, X, RoutingKey, Q}]);
                 _ ->
                     nok
             end;
@@ -126,33 +126,27 @@ bootstrap_crawler() ->
 
 %% @private
 %% @doc Starts a local crawler process and registers the name on the node.
-%% @todo Find a better way to generate Tag
-start_crawler({Channel, X, RoutingKey}) ->
+start_crawler({Channel, _X, _RoutingKey, Q}) ->
     error_logger:info_report([armory_crawler, start_queue]),
     register(armory_crawler, self()),
-
-    Q = lib_amqp:declare_queue(Channel),
-    {'queue.bind_ok'} = lib_amqp:bind_queue(Channel, X, Q, RoutingKey),
-    {_, _, Tag} = now(),
-    lib_amqp:subscribe(Channel, Q, self(), <<Tag:32>>),
-
     proc_lib:init_ack(ok),
-    crawler_loop().
+    crawler_loop({Channel, Q}).
 
 %% @private
 %% @doc The loop used by the local crawler process to dequeue work and act on
 %% it. At this point the only items processable are character,
 %% achievement_summary, guild and character_achievements.
-crawler_loop() ->
-    receive
+crawler_loop({Channel, Q}) ->
+    case lib_amqp:get(Channel, Q) of
+        'basic.get_empty' -> ok;
         {'basic.consume_ok', _} -> ok;
-        {{'basic.deliver', _, _, _, _, _}, {content, _, _, _, [Data]}} ->
+        {content, _, _, _, [Data]} ->
             process_data(erlang:binary_to_term(Data));
         XXX ->
             error_logger:error_report([armory3, {crawler_loop, 0}, unsupported_receive, XXX])
     end,
     timer:sleep(?FETCH_DELAY),
-    ?MODULE:crawler_loop().
+    ?MODULE:crawler_loop({Channel, Q}).
 
 process_data({FromPid, {character, CharacterData}}) ->
     armory:process_character(FromPid, CharacterData);
