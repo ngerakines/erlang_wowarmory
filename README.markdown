@@ -1,4 +1,3 @@
-
 Armory is a lightweight crawler for the World of Warcraft Armory. It provides a number of methods to queue requests, monitor the request queue and process armory data. This module has several restrictions in place to allow developers to pull data from the World of Warcraft armory in a safe, throttled way.
 
     1> armory:start().
@@ -51,3 +50,12 @@ The armory2 module is provides an alternative queuing model. As opposed to the c
 The armory3 module provides another alternative queuing model. It will attempt to use the libampq module that is part of the rabbitmq erlang client library (developed against version 1.5.1). In this case, the master queue process will create an initial connection, channel, exchange and routing key to a rabbitmq server while crawler processes will attempt to create queues on that exchange and subscribe to them.
 
 This module is experimental at best and has gone through no production qualifying tests or use.
+
+## TODO
+
+ * Fail gracefully when crawler processes die.
+ * Restart gracefully when the master queue process dies or it's node goes down.
+ * Hard-code the channel/exchange/etc names for reproducibility on failure and the entire system needs to be restarted or brought back up after failure.
+ * Determine if the timer:sleep/1 model will fill process inboxes until they explode.
+ * Handle failure in the bootstrap_crawler/0 function gracefully.
+ * Find a good, clean way to safely generate subscriber tags when bringing crawlers up.
