@@ -41,3 +41,13 @@ An ok tuple indicates that the page was requested and presented but can also ind
 For both cases he return value will be something like:
 
     {ok,[{"errorcode","noCharacter"}]}
+
+# armory2
+
+The armory2 module is provides an alternative queuing model. As opposed to the core armory module, the armory2 module uses an ets table to store queue information that crawlers fetch from.
+
+# armory3
+
+The armory3 module provides another alternative queuing model. It will attempt to use the libampq module that is part of the rabbitmq erlang client library (developed against version 1.5.1). In this case, the master queue process will create an initial connection, channel, exchange and routing key to a rabbitmq server while crawler processes will attempt to create queues on that exchange and subscribe to them.
+
+This module is experimental at best and has gone through no production qualifying tests or use.
