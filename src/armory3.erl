@@ -39,6 +39,7 @@
 
 start() ->
     inets:start(),
+    bootstrap_queue(),
     bootstrap_crawler(),
     whereis(armory_crawler).
 
