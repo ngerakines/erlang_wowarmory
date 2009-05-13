@@ -19,4 +19,4 @@ package: clean
 
 install:
 	mkdir -p $(prefix)/$(LIBDIR)/erlang_wowarmory-$(VERSION)/{ebin,include}
-	for i in include/*.hrl ebin/*.beam; do install $$i $(prefix)/$(LIBDIR)/erlang_wowarmory-$(VERSION)/$$i ; done
+	for i in ebin/*.beam; do install $$i $(prefix)/$(LIBDIR)/erlang_wowarmory-$(VERSION)/$$i ; done

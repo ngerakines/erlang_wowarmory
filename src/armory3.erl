@@ -25,16 +25,18 @@
 %% - 2009-05-10 ngerakines
 %%   - Initial release
 %%
-%% @todo Handle priority queues
+%% @doc A World of Warcraft Armory crawler using RabbitMQ.
+%% <pre>
+%% armory3:start().
+%% armory3:queue({character, {"US", "Medivh", "Korale"}}, fun(X) -> io:format("X ~p~n", [X]) end).
+%% armory3:queue({character, {"US", "Medivh", "Jeanelly"}}, fun(X) -> io:format("X ~p~n", [X]) end).
+%% </pre>
 -module(armory3).
 -compile(export_all).
 
 -define(FETCH_DELAY, 2000).
 
-%% armory3:bootstrap_queue().
-%% armory3:start().
-%% armory3:queue({character, {"US", "Medivh", "Korale"}}, fun(X) -> io:format("X ~p~n", [X]) end).
-%% armory3:queue({character, {"US", "Medivh", "Jeanelly"}}, fun(X) -> io:format("X ~p~n", [X]) end).
+-include_lib("rabbitmq_server/include/rabbit_framing.hrl").
 
 start() ->
     inets:start(),
@@ -73,13 +75,15 @@ start_queue() ->
     global:register_name(armory_queue, self()),
     ets:new(armory_queue, [ordered_set, named_table, protected]),
     proc_lib:init_ack(ok),
+
     Connection = amqp_connection:start_link("guest", "guest", "localhost"),
     Channel = lib_amqp:start_channel(Connection),
     X = uuid(),
     {'exchange.declare_ok'} = lib_amqp:declare_exchange(Channel, X),
     RoutingKey = uuid(),
-    Q = lib_amqp:declare_queue(Channel),
+    Q = lib_amqp:declare_queue(Channel, <<"wowarmory_queue">>),
     lib_amqp:bind_queue(Channel, X, Q, RoutingKey),
+
     armory3:queue_loop({Channel, X, RoutingKey, Q}).
 
 %% @private
@@ -94,14 +98,11 @@ queue_loop({Channel, X, RoutingKey, Q}) ->
     end,
     armory3:queue_loop({Channel, X, RoutingKey, Q}).
 
+%% @private
 uuid() ->
-    {A, B, C} = now(),
-    <<A:32, B:32, C:32>>.
+    {A, B, C} = now(), <<A:32, B:32, C:32>>.
 
-%% @spec dequeue() -> [item()] | empty
-%% @doc Takes the last item off of the queue. If the queue is empty or hasn't
-%% been started then the 'empty' term is returned. This function will attempt
-%% to bootstrap a local armory_queue process if it can't find the master.
+%% @private
 info() ->
     case global:whereis_name(armory_queue) of
         undefined ->
@@ -112,7 +113,15 @@ info() ->
             receive X -> X end
     end.
 
+%% @doc Returns the number of items in the wowarmory_queue RabbitMQ queue.
+queue_length() ->
+    {Channel, _, _, _} = ?MODULE:info(),
+    QueueDeclare = #'queue.declare'{queue = <<"wowarmory_queue">>, passive = false, durable = false, exclusive = false, auto_delete = false, nowait = false, arguments = []},
+    {'queue.declare_ok', <<"wowarmory_queue">>, MC, _} = amqp_channel:call(Channel, QueueDeclare),
+    MC.
+
 %% @todo Handle bad responses from info/0
+%% @private
 bootstrap_crawler() ->
     case whereis(armory_crawler) of
         undefined ->
@@ -148,6 +157,7 @@ crawler_loop({Channel, Q}) ->
     timer:sleep(?FETCH_DELAY),
     ?MODULE:crawler_loop({Channel, Q}).
 
+%% @private
 process_data({FromPid, {character, CharacterData}}) ->
     armory:process_character(FromPid, CharacterData);
 process_data({FromPid, {achievement_summary, CharacterData}}) ->
