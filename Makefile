@@ -13,10 +13,10 @@ clean:
 	rm -rf erl_crash.dump *.beam *.hrl erlang_wowarmory-$(VERSION).tgz
 
 package: clean
-	@mkdir erlang_wowarmory-$(VERSION)/ && cp -rf src support t Makefile README.markdown erlang_wowarmory-$(VERSION)
+	@mkdir erlang_wowarmory-$(VERSION)/ && cp -rf ebin src support t Makefile README.markdown erlang_wowarmory-$(VERSION)
 	@COPYFILE_DISABLE=true tar zcf erlang_wowarmory-$(VERSION).tgz erlang_wowarmory-$(VERSION)
 	@rm -rf erlang_wowarmory-$(VERSION)/
 
 install:
-	mkdir -p $(prefix)/$(LIBDIR)/erlang_wowarmory-$(VERSION)/{ebin,include}
-	for i in ebin/*.beam; do install $$i $(prefix)/$(LIBDIR)/erlang_wowarmory-$(VERSION)/$$i ; done
+	mkdir -p $(prefix)/$(LIBDIR)/erlang_wowarmory-$(VERSION)/ebin
+	for i in ebin/*; do install $$i $(prefix)/$(LIBDIR)/erlang_wowarmory-$(VERSION)/$$i ; done
